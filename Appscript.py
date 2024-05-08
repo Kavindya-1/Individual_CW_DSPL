@@ -5,20 +5,30 @@ import os
 import warnings
 import plotly.figure_factory as ff
 import plotly.graph_objects as go
+import matplotlib.pyplot as plt
+
 
 warnings.filterwarnings('ignore')
 
-# Setting Streamlit page configuration
+# Setting the Streamlit page configuration
 st.set_page_config(page_title="Superstoredata!!!", page_icon=":bar_chart:", layout="wide")
 
 # Main heading
 st.title("Global Superstore Lite")
 df = pd.read_csv("Global_Superstore_Lite.csv", encoding="ISO-8859-1")
 
+# Getting the min and max date
+startDate = pd.to_datetime(df["Order Date"]).min()
+endDate = pd.to_datetime(df["Order Date"]).max()
+
 df["Order Date"] = pd.to_datetime(df["Order Date"])
 
 
-# Sample association rule results
+# Streamlit dashboard layout and configuration
+st.markdown('<style>div.block-container{padding-top:1rem;}</style>', unsafe_allow_html=True)
+
+
+# association rule results
 association_results = {
 'Phones': [('Machines', 3), ('Appliances', 3), ('Phones', 3), ('Bookcases', 2), ('Copiers', 1), ('Machines', 1), ('Appliances', 1), ('Bookcases', 2), ('Copiers', 1)],
     'Chairs': [('Tables', 3), ('Accessories', 2), ('Copiers', 1), ('Machines', 1), ('Tables', 1), ('Bookcases', 1), ('Chairs', 2), ('Copiers', 1), ('Machines', 1), ('Chairs', 1), ('Phones', 1)],
@@ -52,7 +62,7 @@ data = {
     ]
 }
 
-# Create DataFrame
+# Creating the  DataFrame
 association_sales_summary = pd.DataFrame(data)
 
 # Display DataFrame
@@ -76,13 +86,16 @@ fig.update_layout(xaxis={'tickvals': list(range(len(association_sales_summary)))
 st.plotly_chart(fig, use_container_width=True)
 
 
-# Create a DataFrame for association results
+# Creating a DataFrame for association results
 association_df = pd.DataFrame([(item, assoc_item, freq) for item, assoc_items in association_results.items() for assoc_item, freq in assoc_items], columns=['Item', 'Associated Item', 'Frequency'])
+
+#side bar title
+st.sidebar.markdown("<h1 style='text-align: center; font-size: 35px;'>Your Choice</h1>", unsafe_allow_html=True)
 
 # Sidebar filter for selecting an item
 selected_item = st.sidebar.selectbox("Select an item:", list(association_results.keys()))
 
-# Display the selected item and its associated items
+# Displaying the selected item and its associated items
 st.sidebar.subheader(f"Associated Items with {selected_item}:")
 selected_associations = association_results.get(selected_item, [])
 if selected_associations:
@@ -92,14 +105,9 @@ if selected_associations:
 else:
     st.sidebar.write("No associations found for the selected item.")
 
-# Streamlit dashboard layout and configuration
-st.markdown('<style>div.block-container{padding-top:1rem;}</style>', unsafe_allow_html=True)
 
-# Getting the min and max date
-startDate = pd.to_datetime(df["Order Date"]).min()
-endDate = pd.to_datetime(df["Order Date"]).max()
 
-# Defining col1 and col2 within the same block
+#Defining col1 and col2 together in a single block
 col1, col2 = st.columns((2))
 
 with col1:
@@ -111,25 +119,25 @@ with col2:
 df = df[(df["Order Date"] >= date1) & (df["Order Date"] <= date2)].copy()
 
 st.sidebar.header("Choose your filter: ")
-# Create for Region
+
+# Creating a side bar for Region
 region = st.sidebar.multiselect("Pick your Region", df["Region"].unique())
 if not region:
     df2 = df.copy()
 else:
     df2 = df[df["Region"].isin(region)]
 
-# Create for State
+# Creating a side bar for State
 state = st.sidebar.multiselect("Pick the State", df2["State"].unique())
 if not state:
     df3 = df2.copy()
 else:
     df3 = df2[df2["State"].isin(state)]
 
-# Create for City
+# Creating a side bar for City
 city = st.sidebar.multiselect("Pick the City",df3["City"].unique())
 
 # Filter the data based on Region, State, and City
-
 if not region and not state and not city:
     filtered_df = df
 elif not state and not city:
@@ -149,6 +157,7 @@ else:
 
 category_df = filtered_df.groupby(by=["Category"], as_index=False)["Sales"].sum()
 
+#creating charts for category wise sales and region wise sales
 with col1:
     st.subheader("Category wise Sales")
     fig = px.bar(category_df, x="Category", y="Sales", text=['${:,.2f}'.format(x) for x in category_df["Sales"]],
@@ -161,6 +170,7 @@ with col2:
     fig.update_traces(text=filtered_df["Region"], textposition="outside")
     st.plotly_chart(fig, use_container_width=True)
 
+#adding the exanders for category wise sales and region wise sales
 cl1, cl2 = st.columns((2))
 with cl1:
     with st.expander("Category_ViewData"):
@@ -180,9 +190,19 @@ with cl2:
 filtered_df["month_year"] = filtered_df["Order Date"].dt.to_period("M")
 st.subheader('Time Series Analysis')
 
-linechart = pd.DataFrame(
-    filtered_df.groupby(filtered_df["month_year"].dt.strftime("%Y : %b"))["Sales"].sum()).reset_index()
-fig2 = px.line(linechart, x="month_year", y="Sales", labels={"Sales": "Amount"}, height=500, width=1000, template="gridon",color_discrete_sequence=['red'])
+# Group by month and year and calculate sum of Sales and Profit
+linechart = pd.DataFrame(filtered_df.groupby(filtered_df["month_year"].dt.strftime("%Y : %b")).agg({"Sales": "sum", "Profit": "sum"})).reset_index()
+
+# line chart for Sales and Profit over time
+fig2 = px.line(linechart, x="month_year", y=["Sales", "Profit"], 
+               labels={"value": "Amount"}, height=500, width=1000, 
+               template="gridon", color_discrete_sequence=['red', 'green'])
+
+# Update layout
+fig2.update_layout(title="Sales and Profit Over Time",
+                   xaxis_title="Month-Year",
+                   yaxis_title="Amount")
+# Ploting the graph 
 st.plotly_chart(fig2, use_container_width=True)
 
 with st.expander("View Data of TimeSeries:"):
@@ -191,12 +211,25 @@ with st.expander("View Data of TimeSeries:"):
     st.download_button('Download Data', data=csv, file_name="TimeSeries.csv", mime='text/csv')
 
 
-# Create a scatter plot
-data1 = px.scatter(filtered_df, x="Sales", y="Profit", size="Quantity")
-data1['layout'].update(title="Relationship between Sales and Profits using Scatter Plot.",
+import plotly.express as px
+import numpy as np
+
+# Creating scatter plot for Sales and Profit
+# Creating a scatter plot for sales and discount
+data1 = px.scatter(filtered_df, x="Sales", y="Profit",color_discrete_sequence=['orange'])
+data1['layout'].update(title="Relationship between Sales and Profit using Scatter Plot.",
                        titlefont=dict(size=20), xaxis=dict(title="Sales", titlefont=dict(size=19)),
                        yaxis=dict(title="Profit", titlefont=dict(size=19)))
 st.plotly_chart(data1, use_container_width=True)
+
+
+# Creating a scatter plot for sales and discount
+data1 = px.scatter(filtered_df, x="Sales", y="Discount")
+data1['layout'].update(title="Relationship between Sales and Discount using Scatter Plot.",
+                       titlefont=dict(size=20), xaxis=dict(title="Sales", titlefont=dict(size=19)),
+                       yaxis=dict(title="Discount", titlefont=dict(size=19)))
+st.plotly_chart(data1, use_container_width=True)
+
 
 # Create a DataFrame from association rules data
 data = {
@@ -208,13 +241,13 @@ data = {
     "Zhangs_metric": [0.826087, 0.808511, 0.863636, 0.791667, 0.857143, 1.0, 0.809524, 0.708333, 0.913043, 0.875, 1.0, 0.744681, 0.875]
 }
 
-# Create DataFrame from the association rules data
+# Creating the DataFrame from the association rules data
 df_assoc_rules = pd.DataFrame(data)
 
-# Pivot the DataFrame to create a matrix
+#Reorganizing the DataFrame to form a matrix structure
 heatmap_data = df_assoc_rules.pivot(index='Antecedents', columns='Consequents', values='Zhangs_metric')
 
-# Create heatmap using Plotly
+# Creating the heatmap using Plotly
 fig_heatmap = go.Figure(data=go.Heatmap(
     z=heatmap_data.values,
     x=heatmap_data.columns,
@@ -234,3 +267,4 @@ st.plotly_chart(fig_heatmap, use_container_width=True)
 
 with st.expander("View Association Rules Data"):
     st.write(df_assoc_rules)
+
